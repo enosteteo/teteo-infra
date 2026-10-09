@@ -8,10 +8,16 @@
     - '{{ teteo_deploy }}/compose/minio'
     - '{{ teteo_deploy }}/compose/mc'
     - '{{ teteo_root }}/caddy/config'
+    - '{{ teteo_root }}/caddy/config/portal'
     - '{{ teteo_root }}/caddy/data'
     - '{{ teteo_root }}/backrest/config'
     - '{{ teteo_root }}/backrest/data'
     - '{{ teteo_root }}/backrest/cache'
+- name: Publish static tools portal in the existing Caddy mount
+  ansible.builtin.template:
+    src: '{{ playbook_dir }}/../portal/index.html.j2'
+    dest: '{{ teteo_root }}/caddy/config/portal/index.html'
+    mode: '0644'
 - name: Copy image build definitions
   ansible.builtin.copy:
     src: '{{ playbook_dir }}/../compose/{{ item }}/Dockerfile'
@@ -66,6 +72,11 @@
     state: present
     wait: true
     wait_timeout: 240
+- name: Validate Caddy configuration before reload
+  ansible.builtin.command:
+    argv: [docker, compose, -p, teteo-core, -f, '{{ teteo_deploy }}/compose/core.yml', exec, -T, caddy, caddy, validate, --config, /etc/caddy/Caddyfile]
+  changed_when: false
+  when: core_configs.changed
 - name: Reload Caddy configuration
   ansible.builtin.command:
     argv: [docker, compose, -p, teteo-core, -f, '{{ teteo_deploy }}/compose/core.yml', exec, -T, caddy, caddy, reload, --config, /etc/caddy/Caddyfile]

@@ -12,13 +12,14 @@ address = values['ansible_host']
 domain = values.get('teteo_domain', settings['teteo_domain'])
 user = values.get('teteo_admin_user', settings['teteo_admin_user'])
 checks = {
+    '': '/',
     'git': '/api/healthz', 'pb': '/api/health', 's3': '/minio/health/live',
     'minio': '/', 'backup': '/', 'checks': '/', 'watch': '/', 'buttons': '/', 'jobs': '/',
 }
 ca = root/'.local/teteo-root.crt'
 if not ca.exists(): raise SystemExit('Fetch the CA with the Ansible verify tag first')
 for name, path in checks.items():
-    host = name + '.' + domain
+    host = (name + '.' if name else '') + domain
     config = '\n'.join([
         f'url = "https://{host}{path}"',
         f'resolve = "{host}:443:{address}"',

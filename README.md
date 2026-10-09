@@ -56,3 +56,8 @@ Observed service memory after maintenance: approximately 730 MiB total (about 61
 Run integration checks explicitly: `cd ansible && ../.venv/bin/ansible-playbook acceptance.yml -K`. This performs bounded Docker cleanup (older than seven days), checks all three monitoring pings, and reports repository/resource status. Use `smoke.yml` for Git/CI and `restore.yml` for a new isolated restore.
 The MinIO image is compiled from the pinned official release source. Its built-in version string is `DEVELOPMENT.GOGET`; the release pin is recorded in the Dockerfile/build arguments and image tag.
 On this Mac, DNS/hosts and browser trust for the CA are still client configuration steps. No macOS trust store changes are made automatically. Off-host MinIO replication remains pending.
+
+## Tools portal
+The static portal is served by the existing Caddy container at `http://<SERVER_IP>/` and `https://teteo.lan/`. It groups the eight panels and S3 API endpoint by purpose, includes descriptions, and works on desktop/mobile without external assets or a separate runtime.
+Source: `portal/index.html.j2`. Ansible publishes it to the Caddy configuration volume, so existing Caddy Btrfs/restic backups include the portal. The file server exposes only the portal directory.
+For a single Mac, add the line generated in `.local/teteo.hosts` to `/etc/hosts`, refresh the resolver cache, and import `.local/teteo-root.crt` in Keychain Access, marking this CA trusted. The server is not configured as a LAN DNS resolver; assigning its IP as the Mac's DNS server is not sufficient. Client network/trust settings are not changed automatically.

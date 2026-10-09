@@ -28,7 +28,7 @@
 - name: Prepare DNS or hosts snippet for the client
   ansible.builtin.copy:
     dest: '{{ playbook_dir }}/../.local/teteo.hosts'
-    content: '{{ ansible_host }} git.{{ teteo_domain }} s3.{{ teteo_domain }} minio.{{ teteo_domain }} pb.{{ teteo_domain }} backup.{{ teteo_domain }} checks.{{ teteo_domain }} watch.{{ teteo_domain }} buttons.{{ teteo_domain }} jobs.{{ teteo_domain }}
+    content: '{{ ansible_host }} {{ teteo_domain }} git.{{ teteo_domain }} s3.{{ teteo_domain }} minio.{{ teteo_domain }} pb.{{ teteo_domain }} backup.{{ teteo_domain }} checks.{{ teteo_domain }} watch.{{ teteo_domain }} buttons.{{ teteo_domain }} jobs.{{ teteo_domain }}
 '
     mode: '0644'
   delegate_to: localhost
@@ -37,7 +37,7 @@
   ansible.builtin.blockinfile:
     path: /etc/hosts
     marker: '# {mark} teteo-infra'
-    block: '{{ ansible_host }} git.{{ teteo_domain }} s3.{{ teteo_domain }} minio.{{ teteo_domain }} pb.{{ teteo_domain }} backup.{{ teteo_domain }} checks.{{ teteo_domain }} watch.{{ teteo_domain }} buttons.{{ teteo_domain }} jobs.{{ teteo_domain }}'
+    block: '{{ ansible_host }} {{ teteo_domain }} git.{{ teteo_domain }} s3.{{ teteo_domain }} minio.{{ teteo_domain }} pb.{{ teteo_domain }} backup.{{ teteo_domain }} checks.{{ teteo_domain }} watch.{{ teteo_domain }} buttons.{{ teteo_domain }} jobs.{{ teteo_domain }}'
 - name: Create scoped Docker registry CA directory
   ansible.builtin.file:
     path: '/etc/docker/certs.d/git.{{ teteo_domain }}'
@@ -49,3 +49,15 @@
     dest: '/etc/docker/certs.d/git.{{ teteo_domain }}/ca.crt'
     remote_src: true
     mode: '0644'
+- name: Verify portal is reachable before client DNS configuration
+  ansible.builtin.uri:
+    url: 'http://{{ teteo_address }}/'
+    return_content: true
+    status_code: 200
+  register: portal_response
+- name: Require tools portal content
+  ansible.builtin.assert:
+    that:
+      - "'Forgejo' in portal_response.content"
+      - "'PocketBase' in portal_response.content"
+      - "'OliveTin' in portal_response.content"
