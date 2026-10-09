@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import secrets, subprocess, os
+import secrets, subprocess, os, argparse
 import yaml, bcrypt
+parser=argparse.ArgumentParser()
+parser.add_argument("--host", required=True)
+args=parser.parse_args()
 root=Path(__file__).resolve().parent.parent
 os.umask(0o077)
 local=root/'.local'; local.mkdir(mode=0o700,exist_ok=True)
@@ -11,6 +14,7 @@ host=root/'ansible/host_vars/teteo.yml'
 if host.exists(): raise SystemExit('Existing Vault preserved')
 ui=secrets.token_urlsafe(32)
 data={
+ 'ansible_host':args.host,
  'teteo_minio_root_user':'teteoadmin',
  'teteo_minio_root_password':secrets.token_urlsafe(32),
  'teteo_restic_user':'restic',

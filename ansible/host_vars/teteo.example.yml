@@ -1,4 +1,6 @@
-# Copy to teteo.yml, set unique credentials and ansible-vault encrypt it.
+# Copy to teteo.yml, set machine details and unique credentials, then encrypt it.
+ansible_host: 192.0.2.10
+# Override UID/GID and bind address here if needed.
 teteo_minio_root_user: teteoadmin
 teteo_minio_root_password: REPLACE_ME
 teteo_restic_user: restic

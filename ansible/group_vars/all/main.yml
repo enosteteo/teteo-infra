@@ -1,6 +1,6 @@
 teteo_domain: teteo.lan
-teteo_address: 10.0.0.109
-teteo_bind_address: 10.0.0.109
+teteo_address: '{{ ansible_host }}'
+teteo_bind_address: '{{ ansible_host }}'
 teteo_admin_user: teteoadmin
 teteo_org: enosteteo
 teteo_admin_email: admin@teteo.lan

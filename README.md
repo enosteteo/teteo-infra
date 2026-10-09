@@ -1,11 +1,11 @@
 # teteo-infra
-Rebuildable homeserver engineering stack. Ansible runs on the Mac via SSH to `server@10.0.0.109`.
+Rebuildable homeserver engineering stack. Ansible runs on the Mac via SSH to `server@<SERVER_IP>`.
 
 ## Run
 ```sh
 mise exec python -- python -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python scripts/init-secrets.py
+.venv/bin/python scripts/init-secrets.py --host <SERVER_IP>
 cd ansible
 ../.venv/bin/ansible-galaxy collection install -r collections/requirements.yml
 ../.venv/bin/ansible-playbook site.yml --syntax-check
@@ -16,7 +16,7 @@ A second run must report no unexpected changes. Secrets live in encrypted `ansib
 Read credentials locally with `.venv/bin/ansible-vault view ansible/host_vars/teteo.yml --vault-password-file .local/vault-password`.
 
 ## LAN access
-DNS must resolve `git`, `s3`, `minio`, `pb`, `backup`, `checks`, `watch`, `buttons`, `jobs` under `teteo.lan` to `10.0.0.109`.
+DNS must resolve `git`, `s3`, `minio`, `pb`, `backup`, `checks`, `watch`, `buttons`, `jobs` under `teteo.lan` to the server IP from encrypted host variables.
 Caddy issues an internal CA. Downloaded certificate: `.local/teteo-root.crt`; trust it explicitly in the client keychain to avoid browser warnings. SSH Git uses port 2222:
 ```sh
 git clone ssh://git@git.teteo.lan:2222/enosteteo/smoke.git
