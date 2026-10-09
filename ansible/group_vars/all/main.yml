@@ -1,0 +1,33 @@
+teteo_domain: teteo.lan
+teteo_address: 10.0.0.109
+teteo_bind_address: 10.0.0.109
+teteo_admin_user: teteoadmin
+teteo_org: enosteteo
+teteo_admin_email: admin@teteo.lan
+teteo_root: /srv
+teteo_deploy: /srv/teteo-infra
+teteo_snapshots: /srv/snapshots/teteo
+teteo_timezone: America/Fortaleza
+teteo_network: teteo
+teteo_uid: 1000
+teteo_gid: 1000
+teteo_forgejo_image: data.forgejo.org/forgejo/forgejo:15.0.9
+teteo_runner_image: data.forgejo.org/forgejo/runner:13.0.0
+teteo_caddy_image: caddy:2.11.7-alpine
+teteo_backrest_image: ghcr.io/garethgeorge/backrest:v1.14.1
+teteo_pb_version: 0.40.4
+teteo_pb_sha256: 9042ec818570e79c3628dadcd0a756c1496d9e1173918ec409d133c02f82e5fa
+teteo_minio_version: RELEASE.2025-10-15T17-29-55Z
+teteo_mc_image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+teteo_subvolumes:
+  - forgejo
+  - pocketbase
+  - minio
+  - caddy
+  - backrest
+  - forgejo-runner
+  - teteo-infra
+  - dagu
+  - healthchecks
+  - changedetection
+  - olivetin

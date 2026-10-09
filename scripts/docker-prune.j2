@@ -1,0 +1,7 @@
+#!/bin/bash
+set -euo pipefail
+exec 9>/run/lock/teteo-maintenance.lock
+flock -n 9 || exit 1
+docker container prune --force --filter until=168h
+docker image prune --force --filter until=168h
+docker builder prune --force --filter until=168h --keep-storage 10GB

@@ -1,0 +1,29 @@
+#!/bin/bash
+set -euo pipefail
+exec 9>/run/lock/teteo-maintenance.lock
+flock -n 9 || { echo 'Another maintenance operation is running'; exit 1; }
+set -a; source {{ teteo_deploy }}/restic.env; set +a
+compose=(docker compose -p teteo-core -f {{ teteo_deploy }}/compose/core.yml)
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+base={{ teteo_snapshots }}/$stamp
+mkdir -m 700 "$base"
+restart() { "${compose[@]}" start forgejo pocketbase; }
+trap restart EXIT
+"${compose[@]}" stop -t 60 forgejo pocketbase
+for volume in forgejo pocketbase caddy teteo-infra; do
+  btrfs subvolume snapshot -r "{{ teteo_root }}/$volume" "$base/$volume"
+done
+restart
+trap - EXIT
+restic backup --host teteo --tag nightly \
+  "$base/forgejo" "$base/pocketbase" "$base/caddy" "$base/teteo-infra"
+restic forget --host teteo --tag nightly --group-by host,tags \
+  --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
+# Only timestamp directories from this stack; preserve all other snapshots.
+while IFS= read -r -d '' old; do
+  for volume in forgejo pocketbase caddy teteo-infra; do
+    if btrfs subvolume show "$old/$volume" >/dev/null 2>&1; then btrfs subvolume delete "$old/$volume"; fi
+  done
+  rmdir "$old"
+done < <(find {{ teteo_snapshots }} -mindepth 1 -maxdepth 1 -type d -name '20*T*Z' -mmin +2880 -print0)
+echo 'Backup and retention completed'

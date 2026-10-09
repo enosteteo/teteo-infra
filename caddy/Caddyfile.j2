@@ -1,0 +1,49 @@
+{
+  admin localhost:2019
+  auto_https disable_redirects
+}
+git.{{ teteo_domain }} {
+  tls internal
+  reverse_proxy forgejo:3000
+}
+s3.{{ teteo_domain }} {
+  tls internal
+  reverse_proxy minio:9000
+}
+minio.{{ teteo_domain }} {
+  tls internal
+  reverse_proxy minio:9001
+}
+pb.{{ teteo_domain }} {
+  tls internal
+  reverse_proxy pocketbase:8090
+}
+backup.{{ teteo_domain }} {
+  tls internal
+  basic_auth {
+    {{ teteo_admin_user }} {{ teteo_ui_password_hash }}
+  }
+  reverse_proxy backrest:9898
+}
+checks.{{ teteo_domain }} {
+  tls internal
+  reverse_proxy healthchecks:8000
+}
+watch.{{ teteo_domain }} {
+  tls internal
+  basic_auth {
+    {{ teteo_admin_user }} {{ teteo_ui_password_hash }}
+  }
+  reverse_proxy changedetection:5000
+}
+buttons.{{ teteo_domain }} {
+  tls internal
+  basic_auth {
+    {{ teteo_admin_user }} {{ teteo_ui_password_hash }}
+  }
+  reverse_proxy olivetin:1337
+}
+jobs.{{ teteo_domain }} {
+  tls internal
+  reverse_proxy host.docker.internal:8081
+}

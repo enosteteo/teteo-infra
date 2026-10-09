@@ -1,0 +1,18 @@
+- name: Inspect storage filesystem
+  ansible.builtin.command: findmnt -n -o FSTYPE -T {{ teteo_root }}
+  register: filesystem
+  changed_when: false
+- name: Require Ubuntu, Btrfs and amd64
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - ansible_facts['architecture'] == 'x86_64'
+      - filesystem.stdout == 'btrfs'
+    fail_msg: Unsupported host; never reformat existing data automatically.
+- name: Inspect available disk bytes
+  ansible.builtin.command: df --output=avail -B1 {{ teteo_root }}
+  register: free_disk
+  changed_when: false
+- name: Require at least 30 GiB free
+  ansible.builtin.assert:
+    that: free_disk.stdout_lines[-1] | trim | int > 32212254720

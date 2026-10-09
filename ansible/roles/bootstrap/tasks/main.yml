@@ -1,0 +1,183 @@
+- name: Inspect Forgejo accounts
+  ansible.builtin.command:
+    argv: [docker, compose, -p, teteo-core, -f, '{{ teteo_deploy }}/compose/core.yml', exec, -T, --user, git, forgejo, forgejo, --config, /data/gitea/conf/app.ini, admin, user, list]
+  register: forgejo_users
+  changed_when: false
+- name: Create private Forgejo administrator
+  ansible.builtin.command:
+    argv: [docker, compose, -p, teteo-core, -f, '{{ teteo_deploy }}/compose/core.yml', exec, -T, --user, git, forgejo, forgejo, --config, /data/gitea/conf/app.ini, admin, user, create, --username, '{{ teteo_admin_user }}', --email, '{{ teteo_admin_email }}', --password, '{{ teteo_admin_password }}', --admin, --must-change-password=false]
+  when: teteo_admin_user not in forgejo_users.stdout
+  no_log: true
+  changed_when: true
+- name: Inspect Forgejo organization
+  ansible.builtin.uri:
+    url: 'http://127.0.0.1:3000/api/v1/orgs/{{ teteo_org }}'
+    url_username: '{{ teteo_admin_user }}'
+    url_password: '{{ teteo_admin_password }}'
+    force_basic_auth: true
+    status_code: [200, 404]
+  register: org_status
+  no_log: true
+- name: Create private organization
+  ansible.builtin.uri:
+    url: http://127.0.0.1:3000/api/v1/orgs
+    method: POST
+    url_username: '{{ teteo_admin_user }}'
+    url_password: '{{ teteo_admin_password }}'
+    force_basic_auth: true
+    body_format: json
+    body: {username: '{{ teteo_org }}', visibility: private}
+    status_code: 201
+  when: org_status.status == 404
+  changed_when: true
+  no_log: true
+- name: Inspect smoke repository
+  ansible.builtin.uri:
+    url: 'http://127.0.0.1:3000/api/v1/repos/{{ teteo_org }}/smoke'
+    url_username: '{{ teteo_admin_user }}'
+    url_password: '{{ teteo_admin_password }}'
+    force_basic_auth: true
+    status_code: [200, 404]
+  register: smoke_status
+  no_log: true
+- name: Create smoke repository with Actions enabled
+  ansible.builtin.uri:
+    url: 'http://127.0.0.1:3000/api/v1/orgs/{{ teteo_org }}/repos'
+    method: POST
+    url_username: '{{ teteo_admin_user }}'
+    url_password: '{{ teteo_admin_password }}'
+    force_basic_auth: true
+    body_format: json
+    body: {name: smoke, private: true, auto_init: true, default_branch: main}
+    status_code: 201
+  when: smoke_status.status == 404
+  changed_when: true
+  no_log: true
+- name: Inspect infra mirror
+  ansible.builtin.uri:
+    url: 'http://127.0.0.1:3000/api/v1/repos/{{ teteo_org }}/teteo-infra'
+    url_username: '{{ teteo_admin_user }}'
+    url_password: '{{ teteo_admin_password }}'
+    force_basic_auth: true
+    status_code: [200, 404]
+  register: mirror_status
+  no_log: true
+- name: Create GitHub pull mirror
+  ansible.builtin.uri:
+    url: http://127.0.0.1:3000/api/v1/repos/migrate
+    method: POST
+    url_username: '{{ teteo_admin_user }}'
+    url_password: '{{ teteo_admin_password }}'
+    force_basic_auth: true
+    body_format: json
+    body:
+      clone_addr: https://github.com/enosteteo/teteo-infra.git
+      repo_name: teteo-infra
+      repo_owner: '{{ teteo_org }}'
+      mirror: true
+      mirror_interval: 8h
+      private: true
+      service: github
+    status_code: 201
+  when: mirror_status.status == 404
+  changed_when: true
+  no_log: true
+- name: Create MinIO client configuration directory
+  ansible.builtin.file:
+    path: '{{ teteo_deploy }}/mc'
+    state: directory
+    mode: '0700'
+- name: Write restic bucket policy
+  ansible.builtin.copy:
+    dest: '{{ teteo_deploy }}/restic-policy.json'
+    mode: '0600'
+    content: |
+      {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetBucketLocation","s3:ListBucket","s3:ListBucketMultipartUploads"],"Resource":["arn:aws:s3:::restic"]},{"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject","s3:AbortMultipartUpload","s3:ListMultipartUploadParts"],"Resource":["arn:aws:s3:::restic/*"]}]}
+- name: Bootstrap MinIO bucket and least-privilege restic account
+  ansible.builtin.shell: |
+    set -eu
+    docker run --rm --network {{ teteo_network }} \
+      -e MINIO_ROOT_USER -e MINIO_ROOT_PASSWORD -e RESTIC_USER -e RESTIC_KEY \
+      -v {{ teteo_deploy }}/mc:/root/.mc \
+      -v {{ teteo_deploy }}/restic-policy.json:/policy.json:ro \
+      --entrypoint /bin/sh {{ teteo_mc_image }} -c '
+        set -eu
+        mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null
+        if ! mc stat local/restic >/dev/null 2>&1; then mc mb local/restic; echo CHANGED; fi
+        if ! mc admin user info local "$RESTIC_USER" >/dev/null 2>&1; then
+          mc admin user add local "$RESTIC_USER" "$RESTIC_KEY"; echo CHANGED
+        fi
+        if ! mc admin policy info local restic-only >/dev/null 2>&1; then
+          mc admin policy create local restic-only /policy.json
+          mc admin policy attach local restic-only --user "$RESTIC_USER"; echo CHANGED
+        fi'
+  environment:
+    MINIO_ROOT_USER: '{{ teteo_minio_root_user }}'
+    MINIO_ROOT_PASSWORD: '{{ teteo_minio_root_password }}'
+    RESTIC_USER: '{{ teteo_restic_user }}'
+    RESTIC_KEY: '{{ teteo_restic_key }}'
+  register: minio_bootstrap
+  changed_when: "'CHANGED' in minio_bootstrap.stdout"
+  no_log: true
+- name: Inspect PocketBase bootstrap marker
+  ansible.builtin.stat:
+    path: '{{ teteo_root }}/pocketbase/.admin-bootstrapped'
+  register: pb_bootstrap
+- name: Create PocketBase superuser
+  ansible.builtin.command:
+    argv: [docker, compose, -p, teteo-core, -f, '{{ teteo_deploy }}/compose/core.yml', exec, -T, pocketbase, pocketbase, superuser, upsert, '{{ teteo_admin_email }}', '{{ teteo_admin_password }}', --dir=/pb/pb_data]
+  when: not pb_bootstrap.stat.exists
+  no_log: true
+  changed_when: true
+- name: Record PocketBase bootstrap marker
+  ansible.builtin.copy:
+    dest: '{{ teteo_root }}/pocketbase/.admin-bootstrapped'
+    content: 'Bootstrapped by Ansible; account rotations are explicit.
+'
+    mode: '0600'
+    force: false
+- name: Inspect runner registration
+  ansible.builtin.stat:
+    path: '{{ teteo_root }}/forgejo-runner/uuid'
+  register: runner_registered
+- name: Register runner offline with Forgejo
+  ansible.builtin.command:
+    argv: [docker, compose, -p, teteo-core, -f, '{{ teteo_deploy }}/compose/core.yml', exec, -T, --user, git, forgejo, forgejo, --config, /data/gitea/conf/app.ini, forgejo-cli, actions, register, --name, teteo, --scope, '{{ teteo_org }}', --secret, '{{ teteo_runner_secret }}']
+  when: not runner_registered.stat.exists
+  register: runner_uuid
+  changed_when: true
+  no_log: true
+- name: Preserve runner UUID
+  ansible.builtin.copy:
+    dest: '{{ teteo_root }}/forgejo-runner/uuid'
+    content: '{{ runner_uuid.stdout | trim }}'
+    mode: '0644'
+  when: not runner_registered.stat.exists
+  no_log: true
+- name: Read runner UUID
+  ansible.builtin.slurp:
+    src: '{{ teteo_root }}/forgejo-runner/uuid'
+  register: runner_uuid_file
+- name: Inspect Docker socket GID
+  ansible.builtin.stat:
+    path: /var/run/docker.sock
+  register: docker_socket
+- name: Render runner files
+  ansible.builtin.template:
+    src: '{{ playbook_dir }}/../compose/{{ item.src }}'
+    dest: '{{ item.dest }}'
+    owner: '{{ teteo_uid }}'
+    group: '{{ teteo_gid }}'
+    mode: '0600'
+  loop:
+    - {src: runner.yml.j2, dest: '{{ teteo_deploy }}/compose/runner.yml'}
+    - {src: runner-config.yml.j2, dest: '{{ teteo_root }}/forgejo-runner/config.yml'}
+  no_log: true
+  register: runner_config
+- name: Start separate runner project
+  community.docker.docker_compose_v2:
+    project_src: '{{ teteo_deploy }}/compose'
+    files: [runner.yml]
+    project_name: teteo-runner
+    state: present
+    recreate: '{{ "always" if runner_config.changed else "auto" }}'

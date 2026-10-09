@@ -1,0 +1,51 @@
+- name: Create deployment directories
+  ansible.builtin.file:
+    path: '{{ item }}'
+    state: directory
+    mode: '0750'
+  loop:
+    - '{{ teteo_deploy }}/compose/pocketbase'
+    - '{{ teteo_deploy }}/compose/minio'
+    - '{{ teteo_root }}/caddy/config'
+    - '{{ teteo_root }}/caddy/data'
+    - '{{ teteo_root }}/backrest/config'
+    - '{{ teteo_root }}/backrest/data'
+    - '{{ teteo_root }}/backrest/cache'
+- name: Copy image build definitions
+  ansible.builtin.copy:
+    src: '{{ playbook_dir }}/../compose/{{ item }}/Dockerfile'
+    dest: '{{ teteo_deploy }}/compose/{{ item }}/Dockerfile'
+    mode: '0644'
+  loop: [pocketbase, minio]
+- name: Render core Compose and configuration
+  ansible.builtin.template:
+    src: '{{ playbook_dir }}/../{{ item.src }}'
+    dest: '{{ item.dest }}'
+    mode: '{{ item.mode | default("0644") }}'
+  loop:
+    - {src: compose/core.yml.j2, dest: '{{ teteo_deploy }}/compose/core.yml'}
+    - {src: caddy/Caddyfile.j2, dest: '{{ teteo_root }}/caddy/config/Caddyfile'}
+    - {src: compose/core.env.j2, dest: '{{ teteo_deploy }}/compose/.env', mode: '0600'}
+  no_log: true
+  register: core_configs
+- name: Prepare Backrest repository view (preserve UI edits)
+  ansible.builtin.template:
+    src: '{{ playbook_dir }}/../compose/backrest.json.j2'
+    dest: '{{ teteo_root }}/backrest/config/config.json'
+    mode: '0600'
+    force: false
+  no_log: true
+- name: Build and start core services
+  community.docker.docker_compose_v2:
+    project_src: '{{ teteo_deploy }}/compose'
+    files: [core.yml]
+    project_name: teteo-core
+    build: policy
+    state: present
+    wait: true
+    wait_timeout: 240
+- name: Reload Caddy configuration
+  ansible.builtin.command:
+    argv: [docker, compose, -p, teteo-core, -f, '{{ teteo_deploy }}/compose/core.yml', exec, -T, caddy, caddy, reload, --config, /etc/caddy/Caddyfile]
+  when: core_configs.changed
+  changed_when: true

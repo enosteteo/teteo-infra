@@ -1,0 +1,10 @@
+# Copy to teteo.yml, set unique credentials and ansible-vault encrypt it.
+teteo_minio_root_user: teteoadmin
+teteo_minio_root_password: REPLACE_ME
+teteo_restic_user: restic
+teteo_restic_key: REPLACE_ME
+teteo_restic_password: REPLACE_ME
+teteo_admin_password: REPLACE_ME
+teteo_ui_password: REPLACE_ME
+teteo_ui_password_hash: REPLACE_WITH_BCRYPT
+teteo_healthchecks_secret: REPLACE_ME

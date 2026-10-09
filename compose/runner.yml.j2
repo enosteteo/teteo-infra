@@ -1,0 +1,18 @@
+name: teteo-runner
+services:
+  runner:
+    image: {{ teteo_runner_image }}
+    restart: unless-stopped
+    user: '{{ teteo_uid }}:{{ teteo_gid }}'
+    group_add: ['{{ docker_socket.stat.gid }}']
+    mem_limit: 256m
+    working_dir: /data
+    command: [forgejo-runner, daemon, --config, /data/config.yml]
+    volumes:
+      - '{{ teteo_root }}/forgejo-runner:/data'
+      - '/var/run/docker.sock:/var/run/docker.sock'
+    networks: [teteo]
+networks:
+  teteo:
+    external: true
+    name: {{ teteo_network }}

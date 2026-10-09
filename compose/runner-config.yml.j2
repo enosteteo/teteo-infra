@@ -1,0 +1,26 @@
+log:
+  level: info
+runner:
+  capacity: 1
+  timeout: 1h
+  fetch_timeout: 5s
+  fetch_interval: 20s
+  labels: ['docker:docker://node:22-bookworm-slim']
+cache:
+  enabled: false
+container:
+  network: {{ teteo_network }}
+  privileged: false
+  options: '--memory=1g --cpus=2'
+  valid_volumes: []
+  docker_host: unix:///var/run/docker.sock
+  force_pull: false
+  force_rebuild: false
+host:
+  workdir_parent: /data/work
+server:
+  connections:
+    teteo:
+      url: http://forgejo:3000
+      uuid: {{ runner_uuid_file.content | b64decode | trim }}
+      token: {{ teteo_runner_secret }}

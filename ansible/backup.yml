@@ -1,0 +1,7 @@
+- hosts: teteo
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Create consistent snapshot and S3 backup
+      ansible.builtin.command: /usr/local/sbin/teteo-backup
+      changed_when: true

@@ -1,0 +1,106 @@
+name: teteo-core
+x-common: &common
+  restart: unless-stopped
+  networks: [teteo]
+  logging:
+    driver: json-file
+    options: {max-size: 10m, max-file: '3'}
+services:
+  caddy:
+    <<: *common
+    image: {{ teteo_caddy_image }}
+    mem_limit: 128m
+    ports:
+      - '{{ teteo_bind_address }}:80:80'
+      - '{{ teteo_bind_address }}:443:443'
+    volumes:
+      - '{{ teteo_root }}/caddy/config:/etc/caddy:ro'
+      - '{{ teteo_root }}/caddy/data:/data'
+      - '{{ teteo_root }}/caddy/runtime:/config'
+    extra_hosts: ['host.docker.internal:host-gateway']
+  forgejo:
+    <<: *common
+    image: {{ teteo_forgejo_image }}
+    mem_limit: 768m
+    environment:
+      USER_UID: '{{ teteo_uid }}'
+      USER_GID: '{{ teteo_gid }}'
+      FORGEJO__database__DB_TYPE: sqlite3
+      FORGEJO__server__DOMAIN: git.{{ teteo_domain }}
+      FORGEJO__server__ROOT_URL: https://git.{{ teteo_domain }}/
+      FORGEJO__server__SSH_DOMAIN: git.{{ teteo_domain }}
+      FORGEJO__server__SSH_PORT: '2222'
+      FORGEJO__security__INSTALL_LOCK: 'true'
+      FORGEJO__service__DISABLE_REGISTRATION: 'true'
+      FORGEJO__service__REQUIRE_SIGNIN_VIEW: 'true'
+      FORGEJO__packages__ENABLED: 'true'
+      FORGEJO__actions__ENABLED: 'true'
+      FORGEJO__actions__LOG_RETENTION_DAYS: '14'
+      FORGEJO__actions__ARTIFACT_RETENTION_DAYS: '14'
+      FORGEJO__indexer__REPO_INDEXER_ENABLED: 'false'
+      FORGEJO__repository__DEFAULT_PRIVATE: private
+      FORGEJO__repository__ENABLE_PUSH_CREATE_USER: 'false'
+      FORGEJO__repository__ENABLE_PUSH_CREATE_ORG: 'false'
+      FORGEJO__mirror__DEFAULT_INTERVAL: 8h
+      FORGEJO__webhook__ALLOWED_HOST_LIST: private
+    ports:
+      - '{{ teteo_bind_address }}:2222:22'
+      - '127.0.0.1:3000:3000'
+    volumes: ['{{ teteo_root }}/forgejo:/data']
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://localhost:3000/api/healthz]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+  minio:
+    <<: *common
+    image: teteo/minio:{{ teteo_minio_version }}
+    build:
+      context: ./minio
+      args: {MINIO_VERSION: '{{ teteo_minio_version }}'}
+    mem_limit: 512m
+    environment:
+      MINIO_ROOT_USER: '${MINIO_ROOT_USER}'
+      MINIO_ROOT_PASSWORD: '${MINIO_ROOT_PASSWORD}'
+      MINIO_BROWSER_REDIRECT_URL: https://minio.{{ teteo_domain }}
+    volumes: ['{{ teteo_root }}/minio:/data']
+    ports: ['127.0.0.1:9000:9000']
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:9000/minio/health/live]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+  pocketbase:
+    <<: *common
+    image: teteo/pocketbase:{{ teteo_pb_version }}
+    build:
+      context: ./pocketbase
+      args: {PB_VERSION: '{{ teteo_pb_version }}', PB_SHA256: '{{ teteo_pb_sha256 }}'}
+    mem_limit: 192m
+    volumes: ['{{ teteo_root }}/pocketbase:/pb']
+    ports: ['127.0.0.1:8090:8090']
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://localhost:8090/api/health]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+  backrest:
+    <<: *common
+    image: {{ teteo_backrest_image }}
+    mem_limit: 192m
+    environment:
+      BACKREST_DATA: /data
+      BACKREST_CONFIG: /config/config.json
+      BACKREST_PORT: 0.0.0.0:9898
+      XDG_CACHE_HOME: /cache
+      TZ: {{ teteo_timezone }}
+    volumes:
+      - '{{ teteo_root }}/backrest/data:/data'
+      - '{{ teteo_root }}/backrest/config:/config'
+      - '{{ teteo_root }}/backrest/cache:/cache'
+      - '{{ teteo_snapshots }}:{{ teteo_snapshots }}:ro'
+      - '{{ teteo_root }}/restore-tests:/restore-tests'
+    ports: ['127.0.0.1:9898:9898']
+networks:
+  teteo:
+    name: {{ teteo_network }}

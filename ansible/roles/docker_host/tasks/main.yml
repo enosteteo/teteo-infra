@@ -1,0 +1,23 @@
+- name: Install Ubuntu Docker and backup packages
+  ansible.builtin.apt:
+    name: [docker.io, docker-compose-v2, btrfs-progs, restic, git, curl, unzip, ca-certificates, python3-requests]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+- name: Create Docker config directory
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    mode: '0755'
+- name: Configure Docker overlay2 and bounded logs
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    content: |
+      {"storage-driver":"overlay2","features":{"containerd-snapshotter":false},"log-driver":"json-file","log-opts":{"max-size":"10m","max-file":"3"}}
+    mode: '0644'
+  register: docker_config
+- name: Start Docker
+  ansible.builtin.systemd_service:
+    name: docker
+    enabled: true
+    state: "{{ 'restarted' if docker_config.changed else 'started' }}"

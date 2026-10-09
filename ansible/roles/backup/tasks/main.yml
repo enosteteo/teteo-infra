@@ -1,0 +1,27 @@
+- name: Render restic environment
+  ansible.builtin.template:
+    src: '{{ playbook_dir }}/../scripts/restic.env.j2'
+    dest: '{{ teteo_deploy }}/restic.env'
+    mode: '0600'
+  no_log: true
+- name: Render backup and restore scripts
+  ansible.builtin.template:
+    src: '{{ playbook_dir }}/../scripts/{{ item }}.j2'
+    dest: '/usr/local/sbin/teteo-{{ item }}'
+    mode: '0700'
+  loop: [backup, restore-test, docker-prune]
+- name: Initialize restic only when repository does not exist
+  ansible.builtin.shell: |
+    set -eu
+    set -a
+    . {{ teteo_deploy }}/restic.env
+    set +a
+    if [ ! -e {{ teteo_root }}/minio/restic/config ]; then
+      restic init
+      echo INITIALIZED
+    else
+      restic cat config >/dev/null
+    fi
+  register: restic_init
+  changed_when: "'INITIALIZED' in restic_init.stdout"
+  no_log: true

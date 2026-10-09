@@ -1,0 +1,11 @@
+- name: Rebuild teteo engineering stack
+  hosts: teteo
+  become: true
+  roles:
+    - {role: check_host, tags: [check, fase1, fase3]}
+    - {role: btrfs_layout, tags: [btrfs, fase1]}
+    - {role: docker_host, tags: [docker, fase1]}
+    - {role: core, tags: [caddy, minio, forgejo, pocketbase, backrest, fase1]}
+    - {role: bootstrap, tags: [bootstrap, runner, fase1]}
+    - {role: backup, tags: [backup, fase1]}
+    - {role: verify, tags: [verify, fase1]}

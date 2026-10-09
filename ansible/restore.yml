@@ -1,0 +1,7 @@
+- hosts: teteo
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Restore into isolated scratch and validate repositories
+      ansible.builtin.command: /usr/local/sbin/teteo-restore-test
+      changed_when: true

@@ -1,0 +1,6 @@
+.venv/
+.local/
+ansible/host_vars/*.yml
+!ansible/host_vars/*.example.yml
+*.retry
+__pycache__/

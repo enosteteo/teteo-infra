@@ -1,0 +1,27 @@
+- name: Verify live application endpoints
+  ansible.builtin.uri:
+    url: '{{ item }}'
+    status_code: 200
+  loop:
+    - http://127.0.0.1:3000/api/healthz
+    - http://127.0.0.1:9000/minio/health/live
+    - http://127.0.0.1:8090/api/health
+    - http://127.0.0.1:9898/
+- name: Verify restic repository can be opened
+  ansible.builtin.shell: |
+    set -a; . {{ teteo_deploy }}/restic.env; set +a
+    restic snapshots --json
+  changed_when: false
+  no_log: true
+- name: Verify Docker storage driver
+  ansible.builtin.command: docker info --format '{{ '{{' }} .Driver {{ '}}' }}'
+  register: storage_driver
+  changed_when: false
+- name: Require overlay2
+  ansible.builtin.assert:
+    that: storage_driver.stdout == 'overlay2'
+- name: Download LAN CA for browser trust setup
+  ansible.builtin.fetch:
+    src: '{{ teteo_root }}/caddy/data/caddy/pki/authorities/local/root.crt'
+    dest: '{{ playbook_dir }}/../.local/teteo-root.crt'
+    flat: true

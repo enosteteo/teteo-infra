@@ -1,0 +1,15 @@
+#!/bin/bash
+set -euo pipefail
+exec 9>/run/lock/teteo-maintenance.lock
+flock -n 9 || { echo 'Another maintenance operation is running'; exit 1; }
+set -a; source {{ teteo_deploy }}/restic.env; set +a
+scratch=$(mktemp -d {{ teteo_root }}/restore-tests/test-XXXXXXXX)
+restic restore latest --host teteo --tag nightly --target "$scratch"
+count=0
+while IFS= read -r -d '' repo; do
+  git --git-dir="$repo" fsck --full
+  count=$((count+1))
+done < <(find "$scratch" -type d -name '*.git' -print0)
+[ "$count" -gt 0 ] || { echo 'No restored Git repository found'; exit 1; }
+restic check
+echo "Restore validated: $count repositories; retained at $scratch"
