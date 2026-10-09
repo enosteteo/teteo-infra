@@ -82,6 +82,17 @@
   when: mirror_status.status == 404
   changed_when: true
   no_log: true
+- name: Inspect pinned MinIO client image
+  ansible.builtin.command:
+    argv: [docker, image, inspect, '{{ teteo_mc_image }}']
+  register: mc_image
+  changed_when: false
+  failed_when: false
+- name: Build verified official MinIO client with shell support
+  ansible.builtin.command:
+    argv: [docker, build, --tag, '{{ teteo_mc_image }}', --build-arg, 'MC_VERSION={{ teteo_mc_version }}', --build-arg, 'MC_SHA256={{ teteo_mc_sha256 }}', '{{ teteo_deploy }}/compose/mc']
+  when: mc_image.rc != 0
+  changed_when: true
 - name: Create MinIO client configuration directory
   ansible.builtin.file:
     path: '{{ teteo_deploy }}/mc'
@@ -181,3 +192,32 @@
     project_name: teteo-runner
     state: present
     recreate: '{{ "always" if runner_config.changed else "auto" }}'
+- name: Load operator public SSH key from the controller
+  ansible.builtin.set_fact:
+    teteo_operator_public_key: "{{ lookup('ansible.builtin.file', teteo_client_public_key_file) | trim }}"
+  tags: [client-key]
+  no_log: true
+- name: Inspect operator Forgejo SSH keys
+  ansible.builtin.uri:
+    url: http://127.0.0.1:3000/api/v1/user/keys
+    url_username: '{{ teteo_admin_user }}'
+    url_password: '{{ teteo_admin_password }}'
+    force_basic_auth: true
+    return_content: true
+  register: operator_keys
+  tags: [client-key]
+  no_log: true
+- name: Authorize this Mac to clone and push via Git SSH
+  ansible.builtin.uri:
+    url: http://127.0.0.1:3000/api/v1/user/keys
+    method: POST
+    url_username: '{{ teteo_admin_user }}'
+    url_password: '{{ teteo_admin_password }}'
+    force_basic_auth: true
+    body_format: json
+    body: {title: Mac operator, key: '{{ teteo_operator_public_key }}'}
+    status_code: 201
+  when: teteo_operator_public_key.split()[1] not in (operator_keys.json | map(attribute='key') | join(' '))
+  changed_when: true
+  tags: [client-key]
+  no_log: true

@@ -1,0 +1,13 @@
+- name: Render protected diagnostics with secret redaction
+  ansible.builtin.template:
+    src: '{{ playbook_dir }}/../scripts/diagnostics.py.j2'
+    dest: '{{ teteo_deploy }}/diagnostics.py'
+    mode: '0700'
+  no_log: true
+- name: Read service state and sanitized error details
+  ansible.builtin.command: python3 {{ teteo_deploy }}/diagnostics.py
+  changed_when: false
+  register: diagnostics
+- name: Show sanitized diagnostics
+  ansible.builtin.debug:
+    var: diagnostics.stdout_lines

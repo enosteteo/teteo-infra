@@ -81,6 +81,17 @@
     mode: '0600'
   loop: [backup, restore-test, docker-prune]
   register: dagu_dags
+- name: Validate maintenance DAG specifications
+  ansible.builtin.command:
+    argv: [/usr/local/bin/dagu, validate, '{{ teteo_root }}/dagu/dags/{{ item }}.yaml']
+  loop: [backup, restore-test, docker-prune]
+  environment:
+    DAGU_HOME: '{{ teteo_root }}/dagu'
+    DAGU_AUTH_MODE: basic
+    DAGU_AUTH_BASIC_USERNAME: '{{ teteo_admin_user }}'
+    DAGU_AUTH_BASIC_PASSWORD: '{{ teteo_ui_password }}'
+  changed_when: false
+  no_log: true
 - name: Start Dagu scheduler and authenticated UI
   ansible.builtin.systemd_service:
     name: teteo-dagu

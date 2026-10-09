@@ -1,10 +1,9 @@
-name: docker-prune
 schedule: "0 6 * * 0"
-maxActiveRuns: 1
+max_active_runs: 1
 steps:
   - name: maintenance
     command: /usr/local/sbin/teteo-docker-prune
-handlerOn:
+handler_on:
   success:
     command: curl --fail --silent --show-error http://127.0.0.1:8000/ping/{{ teteo_checks['docker-prune'] }}
   failure:

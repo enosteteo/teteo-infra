@@ -3,6 +3,7 @@
   "instance": "teteo",
   "repos": [{
     "id": "minio",
+    "autoInitialize": true,
     "uri": "s3:http://minio:9000/restic",
     "password": {{ teteo_restic_password | to_json }},
     "env": ["AWS_ACCESS_KEY_ID={{ teteo_restic_user }}", "AWS_SECRET_ACCESS_KEY={{ teteo_restic_key }}"],

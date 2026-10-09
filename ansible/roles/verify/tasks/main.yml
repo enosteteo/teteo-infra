@@ -25,3 +25,27 @@
     src: '{{ teteo_root }}/caddy/data/caddy/pki/authorities/local/root.crt'
     dest: '{{ playbook_dir }}/../.local/teteo-root.crt'
     flat: true
+- name: Prepare DNS or hosts snippet for the client
+  ansible.builtin.copy:
+    dest: '{{ playbook_dir }}/../.local/teteo.hosts'
+    content: '{{ ansible_host }} git.{{ teteo_domain }} s3.{{ teteo_domain }} minio.{{ teteo_domain }} pb.{{ teteo_domain }} backup.{{ teteo_domain }} checks.{{ teteo_domain }} watch.{{ teteo_domain }} buttons.{{ teteo_domain }} jobs.{{ teteo_domain }}
+'
+    mode: '0644'
+  delegate_to: localhost
+  become: false
+- name: Resolve stack names on the server
+  ansible.builtin.blockinfile:
+    path: /etc/hosts
+    marker: '# {mark} teteo-infra'
+    block: '{{ ansible_host }} git.{{ teteo_domain }} s3.{{ teteo_domain }} minio.{{ teteo_domain }} pb.{{ teteo_domain }} backup.{{ teteo_domain }} checks.{{ teteo_domain }} watch.{{ teteo_domain }} buttons.{{ teteo_domain }} jobs.{{ teteo_domain }}'
+- name: Create scoped Docker registry CA directory
+  ansible.builtin.file:
+    path: '/etc/docker/certs.d/git.{{ teteo_domain }}'
+    state: directory
+    mode: '0755'
+- name: Trust the LAN CA for this Docker registry
+  ansible.builtin.copy:
+    src: '{{ teteo_root }}/caddy/data/caddy/pki/authorities/local/root.crt'
+    dest: '/etc/docker/certs.d/git.{{ teteo_domain }}/ca.crt'
+    remote_src: true
+    mode: '0644'

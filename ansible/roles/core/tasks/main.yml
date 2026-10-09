@@ -6,6 +6,7 @@
   loop:
     - '{{ teteo_deploy }}/compose/pocketbase'
     - '{{ teteo_deploy }}/compose/minio'
+    - '{{ teteo_deploy }}/compose/mc'
     - '{{ teteo_root }}/caddy/config'
     - '{{ teteo_root }}/caddy/data'
     - '{{ teteo_root }}/backrest/config'
@@ -16,7 +17,7 @@
     src: '{{ playbook_dir }}/../compose/{{ item }}/Dockerfile'
     dest: '{{ teteo_deploy }}/compose/{{ item }}/Dockerfile'
     mode: '0644'
-  loop: [pocketbase, minio]
+  loop: [pocketbase, minio, mc]
 - name: Render core Compose and configuration
   ansible.builtin.template:
     src: '{{ playbook_dir }}/../{{ item.src }}'
@@ -35,6 +36,27 @@
     mode: '0600'
     force: false
   no_log: true
+- name: Inspect existing Backrest config for missing initialization field
+  ansible.builtin.slurp:
+    src: '{{ teteo_root }}/backrest/config/config.json'
+  register: backrest_config_file
+  no_log: true
+- name: Parse existing Backrest config
+  ansible.builtin.set_fact:
+    backrest_config_json: '{{ backrest_config_file.content | b64decode | from_json }}'
+  no_log: true
+- name: Repair incomplete initial Backrest repository (preserve all other UI settings)
+  ansible.builtin.copy:
+    dest: '{{ teteo_root }}/backrest/config/config.json'
+    content: "{{ backrest_config_json | combine({'repos': [backrest_config_json.repos[0] | combine({'autoInitialize': true})] + backrest_config_json.repos[1:]}) | to_nice_json }}"
+    mode: '0600'
+  when:
+    - backrest_config_json.repos | length > 0
+    - backrest_config_json.repos[0].id == 'minio'
+    - not backrest_config_json.repos[0].get('guid')
+    - not backrest_config_json.repos[0].get('autoInitialize', false)
+  register: backrest_config_repair
+  no_log: true
 - name: Build and start core services
   community.docker.docker_compose_v2:
     project_src: '{{ teteo_deploy }}/compose'
@@ -49,3 +71,11 @@
     argv: [docker, compose, -p, teteo-core, -f, '{{ teteo_deploy }}/compose/core.yml', exec, -T, caddy, caddy, reload, --config, /etc/caddy/Caddyfile]
   when: core_configs.changed
   changed_when: true
+- name: Restart Backrest after one-time configuration repair
+  community.docker.docker_compose_v2:
+    project_src: '{{ teteo_deploy }}/compose'
+    files: [core.yml]
+    project_name: teteo-core
+    services: [backrest]
+    state: restarted
+  when: backrest_config_repair.changed

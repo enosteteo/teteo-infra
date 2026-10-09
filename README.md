@@ -17,7 +17,8 @@ Read credentials locally with `.venv/bin/ansible-vault view ansible/host_vars/te
 
 ## LAN access
 DNS must resolve `git`, `s3`, `minio`, `pb`, `backup`, `checks`, `watch`, `buttons`, `jobs` under `teteo.lan` to the server IP from encrypted host variables.
-Caddy issues an internal CA. Downloaded certificate: `.local/teteo-root.crt`; trust it explicitly in the client keychain to avoid browser warnings. SSH Git uses port 2222:
+Caddy issues an internal CA. Downloaded certificate: `.local/teteo-root.crt`; trust it explicitly in the client keychain to avoid browser warnings. A client hosts/DNS snippet is generated at `.local/teteo.hosts`. You can verify every HTTPS route before configuring client DNS with `.venv/bin/python scripts/verify-lan.py`; it uses the CA file and explicit name resolution without changing macOS settings.
+SSH Git uses port 2222:
 ```sh
 git clone ssh://git@git.teteo.lan:2222/enosteteo/smoke.git
 ```
@@ -48,3 +49,10 @@ Phase 3 requires Phase 1. Command: `cd ansible && ../.venv/bin/ansible-playbook 
 For iterative deployment and checks with one authentication, use `.venv/bin/python scripts/deploy-session.py`. The password is passed via an anonymous file descriptor that is closed on exit; it is never persisted or printed. After deployment, use `smoke`, `backup`, `restore`, and `deploy` for the second idempotence run, then `exit`.
 Ubuntu 26.04 uses sudo-rs. The inventory selects the installed traditional `/usr/bin/sudo.ws` for Ansible's custom prompt; it does not change the system default sudo.
 Syntax validation does not replace deployment and integration checks.
+
+## Deployment validation (2026-10-09)
+Phase 1 and Phase 3 are deployed on Ubuntu 26.04.1 amd64 / Btrfs. Verified: nine HTTPS routes with Caddy's CA, private Git clone/push from the Mac over SSH with host-key verification, a successful Forgejo Actions job, snapshot/restic backup to MinIO, isolated restore with Git fsck and PocketBase SQLite integrity checks, valid Dagu specs, and successful backup/restore/prune pings in Healthchecks.
+Observed service memory after maintenance: approximately 730 MiB total (about 617 MiB in nine containers plus 115 MiB for host Dagu). This is a spot measurement, not a workload capacity guarantee.
+Run integration checks explicitly: `cd ansible && ../.venv/bin/ansible-playbook acceptance.yml -K`. This performs bounded Docker cleanup (older than seven days), checks all three monitoring pings, and reports repository/resource status. Use `smoke.yml` for Git/CI and `restore.yml` for a new isolated restore.
+The MinIO image is compiled from the pinned official release source. Its built-in version string is `DEVELOPMENT.GOGET`; the release pin is recorded in the Dockerfile/build arguments and image tag.
+On this Mac, DNS/hosts and browser trust for the CA are still client configuration steps. No macOS trust store changes are made automatically. Off-host MinIO replication remains pending.

@@ -2,6 +2,7 @@
   hosts: teteo
   become: true
   roles:
+    - {role: diagnostics, tags: [diagnose, never]}
     - {role: check_host, tags: [check, fase1, fase3]}
     - {role: btrfs_layout, tags: [btrfs, fase1]}
     - {role: docker_host, tags: [docker, fase1]}

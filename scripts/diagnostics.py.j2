@@ -1,0 +1,15 @@
+import subprocess, json, pathlib
+secrets = {{ [teteo_admin_password, teteo_ui_password, teteo_minio_root_password, teteo_restic_key, teteo_restic_password, teteo_runner_secret, teteo_healthchecks_secret] | to_json }}
+ids_path = pathlib.Path('{{ teteo_root }}/healthchecks/checks.json')
+if ids_path.exists(): secrets.extend(json.loads(ids_path.read_text()).values())
+commands = [
+    ['/bin/sh', '-c', 'set -a; . {{ teteo_deploy }}/dagu.env; set +a; /usr/local/bin/dagu validate {{ teteo_root }}/dagu/dags/backup.yaml'],
+]
+
+for command in commands:
+    result = subprocess.run(command, capture_output=True, text=True, timeout=90)
+    output = result.stdout + result.stderr
+    for secret in secrets:
+        output = output.replace(secret, '[REDACTED]')
+    print('Command:', ' '.join(command), 'exit:', result.returncode)
+    print(output[:10000])

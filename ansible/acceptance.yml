@@ -1,0 +1,70 @@
+- name: Validate backup state and maintenance integrations
+  hosts: teteo
+  become: true
+  gather_facts: false
+  tags: [acceptance]
+  tasks:
+    - name: Exercise bounded Docker cleanup through Dagu
+      ansible.builtin.shell: |
+        set -a; . {{ teteo_deploy }}/dagu.env; set +a
+        /usr/local/bin/dagu start {{ teteo_root }}/dagu/dags/docker-prune.yaml
+      changed_when: true
+      no_log: true
+    - name: Read restic snapshots
+      ansible.builtin.shell: |
+        set -a; . {{ teteo_deploy }}/restic.env; set +a
+        restic snapshots --json
+      register: snapshot_list
+      changed_when: false
+      no_log: true
+    - name: Require at least one S3 backup
+      ansible.builtin.assert:
+        that: snapshot_list.stdout | from_json | length > 0
+    - name: Report snapshot count
+      ansible.builtin.debug:
+        msg: 'S3 restic snapshots: {{ snapshot_list.stdout | from_json | length }}'
+    - name: Read local maintenance monitoring state
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -p
+          - teteo-automation
+          - -f
+          - '{{ teteo_deploy }}/compose/automation.yml'
+          - exec
+          - -T
+          - healthchecks
+          - python
+          - manage.py
+          - shell
+          - -c
+          - "from hc.api.models import Check; [print(f'{c.name}: {c.get_status()}, {c.n_pings} pings') for c in Check.objects.filter(project__name='teteo').order_by('name')]"
+      changed_when: false
+      register: monitored_jobs
+    - name: Require all three maintenance pings to be healthy
+      ansible.builtin.assert:
+        that:
+          - "'backup: up' in monitored_jobs.stdout"
+          - "'restore-test: up' in monitored_jobs.stdout"
+          - "'docker-prune: up' in monitored_jobs.stdout"
+    - name: Report maintenance check state
+      ansible.builtin.debug:
+        var: monitored_jobs.stdout_lines
+    - name: Verify OliveTin's HTTP action client is installed
+      ansible.builtin.command:
+        argv: [docker, compose, -p, teteo-automation, -f, '{{ teteo_deploy }}/compose/automation.yml', exec, -T, olivetin, curl, --version]
+      changed_when: false
+    - name: Report container memory and CPU
+      ansible.builtin.command:
+        argv:
+          - docker
+          - stats
+          - --no-stream
+          - --format
+          - "{{ '{{' }}.Name{{ '}}' }} {{ '{{' }}.MemUsage{{ '}}' }} {{ '{{' }}.CPUPerc{{ '}}' }}"
+      changed_when: false
+      register: idle_stats
+    - name: Report process resources
+      ansible.builtin.debug:
+        var: idle_stats.stdout_lines

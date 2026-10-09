@@ -2,6 +2,20 @@
   become: true
   gather_facts: false
   tasks:
-    - name: Restore into isolated scratch and validate repositories
+    - name: Inspect maintenance scheduler configuration
+      ansible.builtin.stat:
+        path: '{{ teteo_deploy }}/dagu.env'
+      register: dagu_config
+    - name: Run maintenance through Dagu and report to Healthchecks
+      ansible.builtin.shell: |
+        set -a
+        . {{ teteo_deploy }}/dagu.env
+        set +a
+        /usr/local/bin/dagu start {{ teteo_root }}/dagu/dags/restore-test.yaml
+      when: dagu_config.stat.exists
+      changed_when: true
+      no_log: true
+    - name: Run maintenance directly when Phase 3 is not installed
       ansible.builtin.command: /usr/local/sbin/teteo-restore-test
+      when: not dagu_config.stat.exists
       changed_when: true

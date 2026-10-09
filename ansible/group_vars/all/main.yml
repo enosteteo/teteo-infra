@@ -18,7 +18,9 @@ teteo_backrest_image: ghcr.io/garethgeorge/backrest:v1.14.1
 teteo_pb_version: 0.40.4
 teteo_pb_sha256: 9042ec818570e79c3628dadcd0a756c1496d9e1173918ec409d133c02f82e5fa
 teteo_minio_version: RELEASE.2025-10-15T17-29-55Z
-teteo_mc_image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+teteo_mc_version: RELEASE.2025-08-13T08-35-41Z
+teteo_mc_sha256: 01f866e9c5f9b87c2b09116fa5d7c06695b106242d829a8bb32990c00312e891
+teteo_mc_image: teteo/mc:RELEASE.2025-08-13T08-35-41Z
 teteo_subvolumes:
   - forgejo
   - pocketbase
@@ -36,3 +38,4 @@ teteo_dagu_sha256: 5a84c093b9ba9d02b7a60e106bb91d46f9383fd01c62bd51560e41193f057
 teteo_healthchecks_image: healthchecks/healthchecks:v4.4
 teteo_changedetection_image: ghcr.io/dgtlmoon/changedetection.io:0.60.8
 teteo_olivetin_image: ghcr.io/olivetin/olivetin:3000.20.0
+teteo_client_public_key_file: "{{ lookup('ansible.builtin.env', 'HOME') }}/.ssh/id_ed25519.pub"
