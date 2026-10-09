@@ -1,6 +1,14 @@
+- name: Inspect Docker data path before package installation
+  ansible.builtin.stat:
+    path: /var/lib/docker
+  register: docker_data
+- name: Create dedicated Docker subvolume when data path is absent
+  ansible.builtin.command: btrfs subvolume create /var/lib/docker
+  when: not docker_data.stat.exists
+  changed_when: true
 - name: Install Ubuntu Docker and backup packages
   ansible.builtin.apt:
-    name: [docker.io, docker-compose-v2, btrfs-progs, restic, git, curl, unzip, ca-certificates, python3-requests]
+    name: [docker.io, docker-compose-v2, docker-buildx, btrfs-progs, restic, git, curl, unzip, ca-certificates, python3-requests]
     state: present
     update_cache: true
     cache_valid_time: 3600

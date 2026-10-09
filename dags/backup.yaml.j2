@@ -1,0 +1,11 @@
+name: backup
+schedule: "0 3 * * *"
+maxActiveRuns: 1
+steps:
+  - name: maintenance
+    command: /usr/local/sbin/teteo-backup
+handlerOn:
+  success:
+    command: curl --fail --silent --show-error http://127.0.0.1:8000/ping/{{ teteo_checks['backup'] }}
+  failure:
+    command: curl --fail --silent --show-error http://127.0.0.1:8000/ping/{{ teteo_checks['backup'] }}/fail

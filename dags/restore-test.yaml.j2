@@ -1,0 +1,11 @@
+name: restore-test
+schedule: "0 5 1 * *"
+maxActiveRuns: 1
+steps:
+  - name: maintenance
+    command: /usr/local/sbin/teteo-restore-test
+handlerOn:
+  success:
+    command: curl --fail --silent --show-error http://127.0.0.1:8000/ping/{{ teteo_checks['restore-test'] }}
+  failure:
+    command: curl --fail --silent --show-error http://127.0.0.1:8000/ping/{{ teteo_checks['restore-test'] }}/fail

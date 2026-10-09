@@ -31,3 +31,8 @@ teteo_subvolumes:
   - healthchecks
   - changedetection
   - olivetin
+teteo_dagu_version: 2.18.2
+teteo_dagu_sha256: 5a84c093b9ba9d02b7a60e106bb91d46f9383fd01c62bd51560e41193f05792b
+teteo_healthchecks_image: healthchecks/healthchecks:v4.4
+teteo_changedetection_image: ghcr.io/dgtlmoon/changedetection.io:0.60.8
+teteo_olivetin_image: ghcr.io/olivetin/olivetin:3000.20.0

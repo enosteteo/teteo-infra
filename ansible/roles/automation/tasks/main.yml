@@ -1,0 +1,101 @@
+- name: Create automation state and definition directories
+  ansible.builtin.file:
+    path: '{{ item }}'
+    state: directory
+    mode: '0750'
+  loop:
+    - '{{ teteo_root }}/dagu/dags'
+    - '{{ teteo_deploy }}/downloads'
+- name: Set automation container data ownership
+  ansible.builtin.file:
+    path: '{{ teteo_root }}/{{ item }}'
+    owner: '{{ teteo_uid }}'
+    group: '{{ teteo_gid }}'
+    mode: '0750'
+  loop: [healthchecks, changedetection, olivetin]
+- name: Download official Dagu release with SHA256 verification
+  ansible.builtin.get_url:
+    url: 'https://github.com/dagucloud/dagu/releases/download/v{{ teteo_dagu_version }}/dagu_{{ teteo_dagu_version }}_linux_amd64.tar.gz'
+    dest: '{{ teteo_deploy }}/downloads/dagu-{{ teteo_dagu_version }}.tar.gz'
+    checksum: 'sha256:{{ teteo_dagu_sha256 }}'
+    mode: '0644'
+- name: Extract pinned Dagu binary
+  ansible.builtin.unarchive:
+    src: '{{ teteo_deploy }}/downloads/dagu-{{ teteo_dagu_version }}.tar.gz'
+    dest: '{{ teteo_deploy }}/downloads'
+    remote_src: true
+    include: [dagu]
+- name: Install Dagu binary
+  ansible.builtin.copy:
+    src: '{{ teteo_deploy }}/downloads/dagu'
+    dest: /usr/local/bin/dagu
+    remote_src: true
+    mode: '0755'
+  register: dagu_binary
+- name: Discover Docker host gateway for private UI binding
+  ansible.builtin.command: docker network inspect bridge --format '{{ '{{' }} (index .IPAM.Config 0).Gateway {{ '}}' }}'
+  changed_when: false
+  register: docker_gateway
+- name: Render automation configuration
+  ansible.builtin.template:
+    src: '{{ playbook_dir }}/../{{ item.src }}'
+    dest: '{{ item.dest }}'
+    mode: '{{ item.mode | default("0600") }}'
+    owner: '{{ item.owner | default("root") }}'
+  loop:
+    - {src: compose/automation.yml.j2, dest: '{{ teteo_deploy }}/compose/automation.yml'}
+    - {src: compose/healthchecks.env.j2, dest: '{{ teteo_deploy }}/compose/healthchecks.env'}
+    - {src: compose/olivetin.env.j2, dest: '{{ teteo_deploy }}/compose/olivetin.env'}
+    - {src: compose/olivetin.yaml.j2, dest: '{{ teteo_root }}/olivetin/config.yaml', owner: '{{ teteo_uid }}'}
+    - {src: compose/dagu.env.j2, dest: '{{ teteo_deploy }}/dagu.env'}
+    - {src: compose/dagu.service.j2, dest: /etc/systemd/system/teteo-dagu.service, mode: '0644'}
+    - {src: scripts/healthchecks-init.py.j2, dest: '{{ teteo_deploy }}/healthchecks-init.py'}
+  no_log: true
+  register: automation_configs
+- name: Start Phase 3 containers
+  community.docker.docker_compose_v2:
+    project_src: '{{ teteo_deploy }}/compose'
+    files: [automation.yml]
+    project_name: teteo-automation
+    state: present
+    wait: true
+    wait_timeout: 240
+- name: Bootstrap Healthchecks admin and maintenance checks
+  ansible.builtin.command:
+    argv: [docker, compose, -p, teteo-automation, -f, '{{ teteo_deploy }}/compose/automation.yml', exec, -T, -e, 'HC_ADMIN_PASSWORD={{ teteo_admin_password }}', healthchecks, python, manage.py, shell]
+    stdin: "{{ lookup('ansible.builtin.template', playbook_dir + '/../scripts/healthchecks-init.py.j2') }}"
+  register: hc_init
+  changed_when: "'CHANGED' in hc_init.stdout"
+  no_log: true
+- name: Read Healthchecks ping identifiers
+  ansible.builtin.slurp:
+    src: '{{ teteo_root }}/healthchecks/checks.json'
+  register: hc_checks_file
+- name: Set maintenance ping identifiers
+  ansible.builtin.set_fact:
+    teteo_checks: '{{ hc_checks_file.content | b64decode | from_json }}'
+- name: Render Dagu workflows
+  ansible.builtin.template:
+    src: '{{ playbook_dir }}/../dags/{{ item }}.yaml.j2'
+    dest: '{{ teteo_root }}/dagu/dags/{{ item }}.yaml'
+    mode: '0600'
+  loop: [backup, restore-test, docker-prune]
+  register: dagu_dags
+- name: Start Dagu scheduler and authenticated UI
+  ansible.builtin.systemd_service:
+    name: teteo-dagu
+    enabled: true
+    daemon_reload: '{{ automation_configs.changed }}'
+    state: '{{ "restarted" if automation_configs.changed or dagu_binary.changed else "started" }}'
+- name: Verify Dagu UI authentication and connectivity
+  ansible.builtin.uri:
+    url: 'http://{{ docker_gateway.stdout }}:8081/'
+    url_username: '{{ teteo_admin_user }}'
+    url_password: '{{ teteo_ui_password }}'
+    force_basic_auth: true
+    status_code: 200
+  retries: 15
+  delay: 2
+  register: dagu_ready
+  until: dagu_ready.status == 200
+  no_log: true

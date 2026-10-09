@@ -7,21 +7,29 @@ compose=(docker compose -p teteo-core -f {{ teteo_deploy }}/compose/core.yml)
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 base={{ teteo_snapshots }}/$stamp
 mkdir -m 700 "$base"
-restart() { "${compose[@]}" start forgejo pocketbase; }
+automation=(docker compose -p teteo-automation -f {{ teteo_deploy }}/compose/automation.yml)
+has_automation=false
+if [ -f {{ teteo_deploy }}/compose/automation.yml ]; then has_automation=true; fi
+restart() {
+  "${compose[@]}" start forgejo pocketbase
+  if "$has_automation"; then "${automation[@]}" start healthchecks changedetection; fi
+}
 trap restart EXIT
 "${compose[@]}" stop -t 60 forgejo pocketbase
-for volume in forgejo pocketbase caddy teteo-infra; do
+if "$has_automation"; then "${automation[@]}" stop -t 60 healthchecks changedetection; fi
+volumes=(forgejo pocketbase caddy teteo-infra backrest dagu healthchecks changedetection olivetin)
+for volume in "${volumes[@]}"; do
   btrfs subvolume snapshot -r "{{ teteo_root }}/$volume" "$base/$volume"
 done
 restart
 trap - EXIT
 restic backup --host teteo --tag nightly \
-  "$base/forgejo" "$base/pocketbase" "$base/caddy" "$base/teteo-infra"
+  "$base"
 restic forget --host teteo --tag nightly --group-by host,tags \
   --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
 # Only timestamp directories from this stack; preserve all other snapshots.
 while IFS= read -r -d '' old; do
-  for volume in forgejo pocketbase caddy teteo-infra; do
+  for volume in "${volumes[@]}"; do
     if btrfs subvolume show "$old/$volume" >/dev/null 2>&1; then btrfs subvolume delete "$old/$volume"; fi
   done
   rmdir "$old"

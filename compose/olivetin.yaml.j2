@@ -1,0 +1,17 @@
+listenAddressSingleHTTPFrontend: 0.0.0.0:1337
+logLevel: INFO
+actions:
+  - title: Backup agora
+    icon: backup
+    shell: >-
+      curl --fail --silent --show-error --user "$DAGU_USERNAME:$DAGU_PASSWORD"
+      -H 'Content-Type: application/json' -X POST -d '{}'
+      http://host.docker.internal:8081/api/v1/dags/backup/start
+    timeout: 30
+  - title: Testar restore
+    icon: test
+    shell: >-
+      curl --fail --silent --show-error --user "$DAGU_USERNAME:$DAGU_PASSWORD"
+      -H 'Content-Type: application/json' -X POST -d '{}'
+      http://host.docker.internal:8081/api/v1/dags/restore-test/start
+    timeout: 30

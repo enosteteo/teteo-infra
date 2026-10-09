@@ -1,0 +1,56 @@
+#!/usr/bin/python3
+import base64, json, os, pathlib, subprocess, tempfile, time, urllib.request, urllib.error
+base = 'http://127.0.0.1:3000/api/v1'
+owner = '{{ teteo_org }}'
+user = '{{ teteo_admin_user }}'
+password = {{ teteo_admin_password | to_json }}
+auth = 'Basic ' + base64.b64encode((user + ':' + password).encode()).decode()
+def api(path, method='GET', body=None):
+    req = urllib.request.Request(base + path, method=method, headers={'Authorization': auth, 'Content-Type': 'application/json'}, data=None if body is None else json.dumps(body).encode())
+    with urllib.request.urlopen(req, timeout=30) as res:
+        raw = res.read()
+        return json.loads(raw) if raw else {}
+repo_path = '/repos/' + owner + '/smoke'
+api(repo_path, 'PATCH', {'has_actions': True})
+workflow = 'name: smoke\non: [push]\njobs:\n  echo:\n    runs-on: docker\n    steps:\n      - run: echo Teteo CI is working\n'
+path = repo_path + '/contents/.forgejo/workflows/smoke.yml'
+body = {'content': base64.b64encode(workflow.encode()).decode(), 'branch': 'main', 'message': 'Verify Teteo Actions'}
+try:
+    current = api(path)
+    if base64.b64decode(current['content']).decode() != workflow:
+        body['sha'] = current['sha']; api(path, 'PUT', body)
+except urllib.error.HTTPError as e:
+    if e.code != 404: raise
+    api(path, 'POST', body)
+pathlib.Path('{{ teteo_root }}/restore-tests').mkdir(exist_ok=True)
+with tempfile.TemporaryDirectory(prefix='git-smoke-', dir='{{ teteo_root }}/restore-tests') as td:
+    td = pathlib.Path(td)
+    ask = td/'askpass.py'
+    ask.write_text('#!/usr/bin/python3\nimport os,sys\nprint(os.environ["TETEO_PASSWORD"] if "password" in sys.argv[1].lower() else os.environ["TETEO_USER"])\n')
+    ask.chmod(0o700)
+    env = dict(os.environ, GIT_ASKPASS=str(ask), GIT_TERMINAL_PROMPT='0', TETEO_PASSWORD=password, TETEO_USER=user)
+    def git(*args, cwd=None):
+        return subprocess.check_output(['git', *args], cwd=cwd, env=env, stderr=subprocess.STDOUT).decode().strip()
+    git('clone', 'http://127.0.0.1:3000/' + owner + '/smoke.git', str(td/'repo'))
+    work = td/'repo'
+    git('config','user.name','Teteo smoke test',cwd=work)
+    git('config','user.email','{{ teteo_admin_email }}',cwd=work)
+    (work/'validation.txt').write_text('Validated at ' + time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()) + '\n')
+    git('add','validation.txt',cwd=work)
+    git('commit','-m','Validate clone and push',cwd=work)
+    sha = git('rev-parse','HEAD',cwd=work)
+    git('push','origin','main',cwd=work)
+    git('fsck','--full',cwd=work)
+print('Clone/push and git fsck succeeded; waiting for matching CI run', flush=True)
+for _ in range(120):
+    runs = api(repo_path + '/actions/runs')['workflow_runs']
+    matching = [r for r in runs if r['commit_sha'] == sha]
+    if matching:
+        run = matching[0]
+        if run['status'] == 'success':
+            print('Actions succeeded: ' + str(run['id'])); break
+        if run['status'] in ['failure','cancelled','canceled','skipped']:
+            raise SystemExit('CI ended with status ' + run['status'])
+    time.sleep(5)
+else:
+    raise SystemExit('Timed out waiting for Actions run for commit ' + sha)

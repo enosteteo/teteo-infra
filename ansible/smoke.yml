@@ -1,0 +1,19 @@
+- name: Exercise Git clone, push and Actions
+  hosts: teteo
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Render private integration test script
+      ansible.builtin.template:
+        src: '{{ playbook_dir }}/../scripts/smoke.py.j2'
+        dest: '{{ teteo_deploy }}/smoke.py'
+        mode: '0700'
+      no_log: true
+    - name: Validate Git and wait for green Actions run
+      ansible.builtin.command: python3 {{ teteo_deploy }}/smoke.py
+      changed_when: true
+    - name: Read Forgejo SSH host public key over trusted server connection
+      ansible.builtin.fetch:
+        src: '{{ teteo_root }}/forgejo/ssh/ssh_host_ed25519_key.pub'
+        dest: '{{ playbook_dir }}/../.local/forgejo-ssh-host.pub'
+        flat: true

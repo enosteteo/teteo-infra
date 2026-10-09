@@ -8,4 +8,5 @@
     - {role: core, tags: [caddy, minio, forgejo, pocketbase, backrest, fase1]}
     - {role: bootstrap, tags: [bootstrap, runner, fase1]}
     - {role: backup, tags: [backup, fase1]}
+    - {role: automation, tags: [fase3, dagu, healthchecks, changedetection, olivetin]}
     - {role: verify, tags: [verify, fase1]}

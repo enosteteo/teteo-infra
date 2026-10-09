@@ -1,0 +1,20 @@
+import os, json, datetime
+from pathlib import Path
+from django.contrib.auth import get_user_model
+from hc.accounts.models import Project
+from hc.api.models import Check
+User = get_user_model()
+user, created = User.objects.get_or_create(username='{{ teteo_admin_user }}', defaults={'email': '{{ teteo_admin_email }}', 'is_staff': True, 'is_superuser': True})
+if created:
+    user.set_password(os.environ['HC_ADMIN_PASSWORD']); user.save(); print('CHANGED')
+project, created = Project.objects.get_or_create(owner=user, name='teteo')
+if created: print('CHANGED')
+ids = {}
+for name, hours in [('backup', 25), ('restore-test', 24*32), ('docker-prune', 24*8)]:
+    check, created = Check.objects.get_or_create(project=project, name=name, defaults={'timeout': datetime.timedelta(hours=hours), 'grace': datetime.timedelta(hours=2)})
+    if created: print('CHANGED')
+    ids[name] = str(check.code)
+path = Path('/data/checks.json')
+value = json.dumps(ids, sort_keys=True)
+if not path.exists() or path.read_text() != value:
+    path.write_text(value); print('CHANGED')

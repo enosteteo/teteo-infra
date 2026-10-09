@@ -40,3 +40,11 @@ The local MinIO lives on the same disk: off-host replication is still required f
 - MinIO RELEASE.2025-10-15T17-29-55Z is built from official source to include the last published security fix; upstream is archived: https://github.com/minio/minio/releases/tag/RELEASE.2025-10-15T17-29-55Z
 - Ubuntu packages supply Docker/Compose/restic; overlay2 is explicit, Docker data is excluded from backup.
 Preserve `/srv/ai-memory`, `/srv/projects` and existing snapshots. No filesystem reformats.
+
+## Phase 3
+Healthchecks (SQLite, one worker), changedetection.io and OliveTin run in a separate Compose project. Dagu runs as a systemd service on the host so it can take Btrfs snapshots without a privileged container. Its UI binds only to the Docker host gateway, sits behind Caddy, and requires authentication. OliveTin calls its authenticated API; it has no Docker socket or host volume access.
+DAG definitions are versioned in `dags/`: nightly backup at 03:00, monthly restore test on day 1 at 05:00, weekly bounded Docker cleanup on Sunday at 06:00 (America/Fortaleza). Each reports success/failure to local Healthchecks. Notification destinations remain an operator setting; no outbound messages are configured automatically.
+Phase 3 requires Phase 1. Command: `cd ansible && ../.venv/bin/ansible-playbook site.yml --tags fase3 -K`.
+For iterative deployment and checks with one authentication, use `.venv/bin/python scripts/deploy-session.py`. The password is passed via an anonymous file descriptor that is closed on exit; it is never persisted or printed. After deployment, use `smoke`, `backup`, `restore`, and `deploy` for the second idempotence run, then `exit`.
+Ubuntu 26.04 uses sudo-rs. The inventory selects the installed traditional `/usr/bin/sudo.ws` for Ansible's custom prompt; it does not change the system default sudo.
+Syntax validation does not replace deployment and integration checks.

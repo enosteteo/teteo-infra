@@ -1,0 +1,46 @@
+name: teteo-automation
+services:
+  healthchecks:
+    image: {{ teteo_healthchecks_image }}
+    restart: unless-stopped
+    user: '{{ teteo_uid }}:{{ teteo_gid }}'
+    mem_limit: 384m
+    env_file: healthchecks.env
+    environment:
+      DB: sqlite
+      DB_NAME: /data/hc.sqlite
+      ALLOWED_HOSTS: '*'
+      SITE_ROOT: https://checks.{{ teteo_domain }}
+      SITE_NAME: Teteo Healthchecks
+      REGISTRATION_OPEN: 'False'
+      DEBUG: 'False'
+      UWSGI_PROCESSES: '1'
+      PING_ENDPOINT: https://checks.{{ teteo_domain }}/ping/
+      CSRF_TRUSTED_ORIGINS: https://checks.{{ teteo_domain }}
+    volumes: ['{{ teteo_root }}/healthchecks:/data']
+    ports: ['127.0.0.1:8000:8000']
+    networks: [teteo]
+  changedetection:
+    image: {{ teteo_changedetection_image }}
+    restart: unless-stopped
+    mem_limit: 256m
+    environment:
+      TZ: {{ teteo_timezone }}
+      BASE_URL: https://watch.{{ teteo_domain }}
+    volumes: ['{{ teteo_root }}/changedetection:/datastore']
+    ports: ['127.0.0.1:5000:5000']
+    networks: [teteo]
+  olivetin:
+    image: {{ teteo_olivetin_image }}
+    restart: unless-stopped
+    user: '{{ teteo_uid }}:{{ teteo_gid }}'
+    mem_limit: 192m
+    env_file: olivetin.env
+    volumes: ['{{ teteo_root }}/olivetin:/config:ro']
+    ports: ['127.0.0.1:1337:1337']
+    extra_hosts: ['host.docker.internal:host-gateway']
+    networks: [teteo]
+networks:
+  teteo:
+    external: true
+    name: {{ teteo_network }}

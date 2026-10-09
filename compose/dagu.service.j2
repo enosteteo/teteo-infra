@@ -1,0 +1,17 @@
+[Unit]
+Description=Teteo Dagu maintenance scheduler
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+User=root
+EnvironmentFile={{ teteo_deploy }}/dagu.env
+ExecStart=/usr/local/bin/dagu start-all
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+[Install]
+WantedBy=multi-user.target
